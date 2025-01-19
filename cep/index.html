@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>FlashLink Sync</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 10px; 
+            background-color: #535353;
+            color: #fff;
+        }
+        .status { 
+            padding: 10px; 
+            margin: 5px; 
+            border-radius: 4px; 
+        }
+        .connected { 
+            background-color: #90EE90; 
+            color: #000;
+        }
+        .disconnected { 
+            background-color: #FFB6C1;
+            color: #000;
+        }
+        .config {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #444;
+            border-radius: 4px;
+        }
+        input {
+            width: 200px;
+            padding: 5px;
+            margin: 5px 0;
+        }
+        button {
+            padding: 5px 10px;
+            margin: 5px 0;
+            background-color: #666;
+            border: none;
+            color: white;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="config">
+        <input type="text" id="serverIP" placeholder="Server IP Address" value="localhost">
+        <input type="text" id="serverPort" placeholder="Port" value="3000">
+        <button onclick="connect()">Connect</button>
+    </div>
+    <div id="status" class="status">Not connected</div>
+    <div id="debug" class="debug"></div>
+    <script src="./js/CSInterface.js"></script>
+    <script>
+        const csInterface = new CSInterface();
+        let socket;
+        let isConnected = false;
+        let changeCheckInterval;
+
+        function connect() {
+            const ip = document.getElementById('serverIP').value;
+            const port = document.getElementById('serverPort').value;
+            
+            if (socket) {
+                socket.close();
+                if (changeCheckInterval) {
+                    clearInterval(changeCheckInterval);
+                }
+            }
+            
+            connectToServer(ip, port);
+        }
+
+        function connectToServer(ip, port) {
+            updateStatus('Connecting...');
+            
+            socket = new WebSocket(`ws://${ip}:${port}`);
+            
+            socket.onopen = () => {
+                isConnected = true;
+                updateStatus('Connected to sync server');
+                initializeAnimateEvents();
+            };
+            
+            socket.onclose = () => {
+                isConnected = false;
+                updateStatus('Disconnected from server');
+                if (changeCheckInterval) {
+                    clearInterval(changeCheckInterval);
+                }
+            };
+            
+            socket.onerror = (error) => {
+                updateStatus('Connection error: ' + error.message);
+            };
+            
+            socket.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleServerMessage(message);
+            };
+        }
+
+        // ... rest of the panel code ...
+    </script>
+</body>
+</html>
