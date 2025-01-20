@@ -14,23 +14,22 @@ app.get('/', (req, res)=> {
     res.send('hello world!');
 });
 
-io.on('connection', (socket)=>{
-    console.log(`New client connected!`);
-    console.log(`socketID: ${socket.id}`);
-
-    socket.on('disconnect', () => {
-        console.log(`Client disconnected: ${socket.id}`);
-    });
-
-    socket.on('message', (data) => {
-        console.log(`Received message from ${socket.id}:`, data);
-        // Broadcast to other clients
-        socket.broadcast.emit('message', {
-            ...data,
-            senderId: socket.id
-        });
-    });
+// Add error handlers
+io.engine.on("connection_error", (err) => {
+    console.log("Connection error:", err.req);      // the request object
+    console.log("Error message:", err.code);     // the error code
+    console.log("Error message:", err.message);  // the error message
+    console.log("Error context:", err.context);  // some additional error context
 });
 
-// Log when server starts
-console.log('Starting server...');
+io.on('connection', (socket)=>{
+    console.log(`socketID: ${socket.id}`);
+    
+    socket.on('connect_error', (error) => {
+        console.log('Socket connect_error:', error);
+    });
+
+    socket.on('error', (error) => {
+        console.log('Socket error:', error);
+    });
+});
