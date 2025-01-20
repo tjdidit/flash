@@ -9,91 +9,108 @@ const PORT = process.env.PORT || 3000;
 const documents = new Map(); // Map<documentPath, Set<socketId>>
 const clientDocuments = new Map(); // Map<socketId, documentPath>
 
-// Socket.IO error handlers
-io.engine.on("connection_error", (err) => {
-    console.log("Connection error:", err.req);
-    console.log("Error message:", err.code);
-    console.log("Error message:", err.message);
-    console.log("Error context:", err.context);
-});
-
 io.on('connection', (socket) => {
     console.log(`Client connected: ${socket.id}`);
     
     socket.on('message', (data) => {
-        handleMessage(socket, data);
+        console.log(`Received message from ${socket.id}:`, JSON.stringify(data));
+        
+        switch (data.type) {
+            case 'register':
+                handleRegister(socket, data);
+                break;
+            case 'stateChange':
+                // Direct state change handling
+                handleStateChange(socket, data);
+                break;
+            case 'changes':
+                // Wrapped changes handling
+                handleChanges(socket, data);
+                break;
+            default:
+                console.log('Unknown message type:', data.type);
+        }
     });
 
     socket.on('disconnect', () => {
         handleDisconnect(socket);
     });
-
-    socket.on('error', (error) => {
-        console.log('Socket error:', error);
-    });
 });
 
-function handleMessage(socket, data) {
-    switch (data.type) {
-        case 'register':
-            registerDocument(socket, data.filePath);
-            break;
-        case 'changes':
-            broadcastChanges(socket, data.changes);
-            break;
-    }
-}
+function handleRegister(socket, data) {
+    const documentPath = data.filePath;
+    console.log(`Registering client ${socket.id} for document ${documentPath}`);
 
-function registerDocument(socket, documentPath) {
-    // Remove client from previous document if any
+    // Remove from previous document if any
     const previousDoc = clientDocuments.get(socket.id);
     if (previousDoc) {
         const docClients = documents.get(previousDoc);
         if (docClients) {
             docClients.delete(socket.id);
-            if (docClients.size === 0) {
-                documents.delete(previousDoc);
-            }
         }
     }
 
-    // Add client to new document
+    // Add to new document
     if (!documents.has(documentPath)) {
         documents.set(documentPath, new Set());
     }
     documents.get(documentPath).add(socket.id);
     clientDocuments.set(socket.id, documentPath);
 
-    // Join socket room for this document
+    // Join socket room
     socket.join(documentPath);
 
-    // Notify client of successful registration
+    // Confirm registration
     socket.emit('message', {
         type: 'registered',
         filePath: documentPath
     });
 
-    console.log(`Client ${socket.id} registered to document: ${documentPath}`);
+    console.log(`Client ${socket.id} registered to ${documentPath}`);
+    console.log('Current documents:', Array.from(documents.entries()));
+    console.log('Current clients:', Array.from(clientDocuments.entries()));
 }
 
-function broadcastChanges(socket, changes) {
+function handleStateChange(socket, changes) {
     const documentPath = clientDocuments.get(socket.id);
     if (!documentPath) {
-        console.log('Client not registered to any document');
+        console.log(`Client ${socket.id} not registered to any document`);
         return;
     }
 
-    // Broadcast changes to all clients in the document except sender
-    socket.to(documentPath).emit('message', {
+    console.log(`Broadcasting state change from ${socket.id} to document ${documentPath}`);
+    
+    // Wrap the state change in our message format
+    const message = {
         type: 'changes',
         changes: changes,
         senderId: socket.id
-    });
+    };
+
+    // Broadcast to all clients in the document except sender
+    socket.to(documentPath).emit('message', message);
+}
+
+function handleChanges(socket, data) {
+    const documentPath = clientDocuments.get(socket.id);
+    if (!documentPath) {
+        console.log(`Client ${socket.id} not registered to any document`);
+        return;
+    }
 
     console.log(`Broadcasting changes from ${socket.id} to document ${documentPath}`);
+    
+    // Forward the changes message
+    socket.to(documentPath).emit('message', {
+        type: 'changes',
+        changes: data.changes,
+        senderId: socket.id
+    });
 }
 
 function handleDisconnect(socket) {
+    console.log(`Client disconnected: ${socket.id}`);
+    
     const documentPath = clientDocuments.get(socket.id);
     if (documentPath) {
         const docClients = documents.get(documentPath);
@@ -105,7 +122,6 @@ function handleDisconnect(socket) {
         }
     }
     clientDocuments.delete(socket.id);
-    console.log(`Client disconnected: ${socket.id}`);
 }
 
 http.listen(PORT, () => {
