@@ -59,25 +59,30 @@ function handleRegister(socket, filePath) {
 function broadcastChanges(socket, data) {
     const filePath = clientDocuments.get(socket.id);
     if (!filePath) {
-        console.log('Client not registered to any document');
+        console.log('Client not registered to any document:', socket.id);
         return;
     }
 
     const recipients = documents.get(filePath);
     if (!recipients) {
-        console.log('No recipients found for document');
+        console.log('No recipients found for document:', filePath);
         return;
     }
+
+    console.log('Broadcasting change:', JSON.stringify(data.changes));
+    console.log('From client:', socket.id);
+    console.log('To recipients:', Array.from(recipients));
 
     // Broadcast to all clients in the same document except sender
     recipients.forEach(recipientId => {
         if (recipientId !== socket.id) {
-            console.log(`Broadcasting from ${socket.id} to ${recipientId}`);
+            console.log(`Sending to ${recipientId}`);
             io.to(recipientId).emit('message', {
                 type: 'changes',
                 changes: data.changes,
                 senderId: socket.id
             });
+            console.log('Sent successfully');
         }
     });
 }
